@@ -13,11 +13,29 @@ services:
       PGPORT: "${GARNET_DB_PORT:-5432}"
     volumes:
       - pg-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p $${PGPORT:-5432} -U cbomkit -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 5
+
+  remediation:
+    image: q-resil-remediation:offline
+    pull_policy: never
+    restart: always
+    network_mode: host
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      QUARKUS_HTTP_PORT: "${GARNET_REMEDIATION_PORT:-9400}"
+      REMEDIATION_DB_URL: "jdbc:postgresql://127.0.0.1:${GARNET_DB_PORT:-5432}/remediation"
+      REMEDIATION_DB_USER: cbomkit
+      REMEDIATION_DB_PASSWORD: cbomkit_secure_poc_pass
+      REMEDIATION_AUTH_SECRET: "${REMEDIATION_AUTH_SECRET:-0123456789abcdef0123456789abcdef}"
+      REMEDIATION_SWEEP_ON_PACK_CHANGE: "true"
+      REMEDIATION_JOBS_ENABLED: "true"
 
   backend:
     image: q-resil-cbom:offline
@@ -27,6 +45,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      remediation:
+        condition: service_started
     environment:
       CBOMKIT_PORT: "${GARNET_API_PORT:-8081}"
       CBOMKIT_DB_TYPE: postgresql
@@ -36,6 +56,9 @@ services:
       CBOMKIT_FRONTEND_URL_CORS: "*"
       CBOMKIT_SCANNING_JAVA_RESOLVE_DEPENDENCIES: "false"
       CBOMKIT_OPA_API_BASE: ""
+      CBOMKIT_REMEDIATION_ENABLED: "true"
+      CBOMKIT_REMEDIATION_API_BASE: "http://127.0.0.1:${GARNET_REMEDIATION_PORT:-9400}"
+      CBOMKIT_REMEDIATION_AUTH_SECRET: "${REMEDIATION_AUTH_SECRET:-0123456789abcdef0123456789abcdef}"
     volumes:
       - cbomkit-data:/home/user/.cbomkit
 
@@ -50,8 +73,8 @@ services:
       GARNET_UI_PORT: "${GARNET_UI_PORT:-8000}"
       GARNET_API_PORT: "${GARNET_API_PORT:-8081}"
       CBOMKIT_BACKEND_URL: "http://127.0.0.1:${GARNET_API_PORT:-8081}"
+      Q_RESIL_REMEDIATION_ENABLED: "true"
 
 volumes:
   pg-data:
   cbomkit-data:
-

@@ -337,16 +337,18 @@ echo "==> Checking port availability..."
 GARNET_UI_PORT=$(find_next_free_port 8000 "Web UI")
 GARNET_API_PORT=$(find_next_free_port 8081 "Backend API")
 GARNET_DB_PORT=$(find_next_free_port 5432 "PostgreSQL Database")
+GARNET_REMEDIATION_PORT=$(find_next_free_port 9400 "Remediation Engine")
 
 export GARNET_UI_PORT
 export GARNET_API_PORT
 export GARNET_DB_PORT
+export GARNET_REMEDIATION_PORT
 
 # 7. Start the stack
 echo "==> Bringing up Garnet Q-Resil containers..."
 run_compose up -d
 
-# Self-heal database credentials if an existing volume was present from an older run
+# Self-heal database credentials and initialize remediation DB
 DB_CONTAINER="$(run_compose ps -q db 2>/dev/null | head -n 1)"
 [ -z "${DB_CONTAINER}" ] && DB_CONTAINER="garnet-offline-build-db-1"
 
@@ -355,6 +357,9 @@ DB_ATTEMPTS=0
 while [ $DB_ATTEMPTS -lt 15 ]; do
   if run_runtime exec "${DB_CONTAINER}" pg_isready -h 127.0.0.1 -p "${GARNET_DB_PORT:-5432}" -U cbomkit -d postgres &>/dev/null; then
     run_runtime exec "${DB_CONTAINER}" psql -h 127.0.0.1 -p "${GARNET_DB_PORT:-5432}" -U cbomkit -d postgres -c "ALTER USER cbomkit WITH PASSWORD 'cbomkit_secure_poc_pass';" &>/dev/null || true
+    run_runtime exec "${DB_CONTAINER}" psql -h 127.0.0.1 -p "${GARNET_DB_PORT:-5432}" -U cbomkit -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'remediation'" 2>/dev/null | grep -q 1 || \
+    run_runtime exec "${DB_CONTAINER}" psql -h 127.0.0.1 -p "${GARNET_DB_PORT:-5432}" -U cbomkit -d postgres -c "CREATE DATABASE remediation OWNER cbomkit;" &>/dev/null || true
+    run_compose restart remediation &>/dev/null || true
     break
   fi
   sleep 1
@@ -366,9 +371,10 @@ echo "=========================================================="
 echo "  [SUCCESS] Garnet Q-Resil is LIVE (100% Offline)         "
 echo "=========================================================="
 echo ""
-echo "  Web UI:    http://localhost:${GARNET_UI_PORT} (or http://<SERVER_IP>:${GARNET_UI_PORT})"
-echo "  API Docs:  http://localhost:${GARNET_API_PORT}/api"
-echo "  Database:  127.0.0.1:${GARNET_DB_PORT}"
+echo "  Web UI:             http://localhost:${GARNET_UI_PORT} (or http://<SERVER_IP>:${GARNET_UI_PORT})"
+echo "  Backend API:        http://localhost:${GARNET_API_PORT}/api"
+echo "  Remediation Engine: http://localhost:${GARNET_REMEDIATION_PORT}/q/health"
+echo "  Database:           127.0.0.1:${GARNET_DB_PORT}"
 echo ""
 if [ "${EXEC_MODE}" = "direct" ]; then
   echo "  Logs:      ${COMPOSE_CMD} logs -f"

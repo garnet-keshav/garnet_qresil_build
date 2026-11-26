@@ -50,7 +50,7 @@ To backup or restore your database at any time:
 - **`start.bat` & `stop.bat`**: 1-click startup & shutdown launchers for Windows.
 - **`docker-compose.yml`**: Compose manifest defining the project `garnet-offline-build`.
 - **`docker-images/`**: Container images compressed with gzip and stored in <50MB multi-part chunks for Git/GitHub compatibility (auto-assembled into `q-resil-images.tar.gz` on startup).
-- **`q-resil-images.tar.gz`**: 100% offline container images (UI, Backend, Postgres) — reassembled automatically by `start.sh` / `start.bat`.
+- **`q-resil-images.tar.gz`**: 100% offline container images (UI, Backend, Remediation Engine, Postgres) — reassembled automatically by `start.sh` / `start.bat`.
 - **`docker-offline-installer/`**:
   - `install-docker-offline.sh`: Single master parent installer (auto-detects OS and runs child script).
   - `install-docker-offline.bat`: Windows 1-click batch launcher.

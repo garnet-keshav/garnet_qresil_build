@@ -1,0 +1,2 @@
+CREATE DATABASE remediation;
+GRANT ALL PRIVILEGES ON DATABASE remediation TO cbomkit;

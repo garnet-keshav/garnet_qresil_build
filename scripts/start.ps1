@@ -112,12 +112,13 @@ Write-Host "==> Checking port availability..." -ForegroundColor Cyan
 $env:GARNET_UI_PORT = Find-NextFreePort 8000 "Web UI"
 $env:GARNET_API_PORT = Find-NextFreePort 8081 "Backend API"
 $env:GARNET_DB_PORT = Find-NextFreePort 5432 "PostgreSQL Database"
+$env:GARNET_REMEDIATION_PORT = Find-NextFreePort 9400 "Remediation Engine"
 
 # 4. Start the stack
 Write-Host "==> Bringing up Garnet Q-Resil containers..." -ForegroundColor Cyan
 & docker compose up -d
 
-# 5. Self-heal database credentials if needed
+# 5. Self-heal database credentials and initialize remediation DB
 $DbContainer = & docker ps -q -f "name=garnet-offline-build-db" | Select-Object -First 1
 if (-not $DbContainer) { $DbContainer = "garnet-offline-build-db-1" }
 
@@ -128,6 +129,8 @@ while (-not $DbReady -and ($Attempts -lt 15)) {
     if ($LASTEXITCODE -eq 0) {
         $DbReady = $true
         & docker exec $DbContainer psql -h 127.0.0.1 -p $env:GARNET_DB_PORT -U cbomkit -d postgres -c "ALTER USER cbomkit WITH PASSWORD 'cbomkit_secure_poc_pass';" 2>$null | Out-Null
+        & docker exec $DbContainer psql -h 127.0.0.1 -p $env:GARNET_DB_PORT -U cbomkit -d postgres -c "CREATE DATABASE remediation OWNER cbomkit;" 2>$null | Out-Null
+        & docker compose restart remediation 2>$null | Out-Null
         break
     }
     Start-Sleep -Seconds 1
@@ -139,9 +142,10 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  [SUCCESS] Garnet Q-Resil is LIVE on Windows!            " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Web UI:    http://localhost:$($env:GARNET_UI_PORT)" -ForegroundColor Cyan
-Write-Host "  API Docs:  http://localhost:$($env:GARNET_API_PORT)/api" -ForegroundColor Cyan
-Write-Host "  Database:  127.0.0.1:$($env:GARNET_DB_PORT)" -ForegroundColor Cyan
+Write-Host "  Web UI:             http://localhost:$($env:GARNET_UI_PORT)" -ForegroundColor Cyan
+Write-Host "  Backend API:        http://localhost:$($env:GARNET_API_PORT)/api" -ForegroundColor Cyan
+Write-Host "  Remediation Engine: http://localhost:$($env:GARNET_REMEDIATION_PORT)/q/health" -ForegroundColor Cyan
+Write-Host "  Database:           127.0.0.1:$($env:GARNET_DB_PORT)" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Logs:      docker compose logs -f"
 Write-Host "  Stop:      .\stop.bat (or .\scripts\stop.ps1)"
